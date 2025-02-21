@@ -1,0 +1,859 @@
+4518
+
+RewardAppApplication
+============================
+public static void main(String[] args) {
+		SpringApplication.run(RewardAppApplication.class, args);
+	}
+========================
+package com.cg.rewardSystem.config;
+
+import java.time.LocalDate;
+import java.util.Arrays;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
+import com.cg.rewardSystem.entity.Transaction;
+import com.cg.rewardSystem.repository.TranscationRepository;
+
+@Component
+public class DataLoder implements CommandLineRunner {
+
+	@Autowired
+	private TranscationRepository repo;
+	
+	@Override
+	public void run(String... args) throws Exception {
+
+		repo.saveAll(Arrays.asList(
+				new Transaction(1L, 120.0, LocalDate.now().minusMonths(1)),
+				new Transaction(1L, 80.0, LocalDate.now().minusMonths(2)),
+				new Transaction(2L, 200.0, LocalDate.now().minusMonths(1)),
+				new Transaction(2L, 50.0, LocalDate.now().minusMonths(3)),
+				new Transaction(3L, 120.0, LocalDate.now().minusMonths(0))
+				));
+		
+
+	}
+
+}
+==============================
+package com.cg.rewardSystem.controller;
+
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.cg.rewardSystem.Iservice.IRewardService;
+
+@RestController
+@RequestMapping("/rewards")
+public class RewardController {
+
+	@Autowired
+	private IRewardService service;
+	
+	/**
+	 * Retrieve reward points for a given customers.
+	 * @param customerId The ID of the customer.
+	 * @return Customer Data with total and 3 month rewards points. 
+	 */
+	@GetMapping("/id/{customerId}")
+	public ResponseEntity<CustomerData> getRewardsResponse(@PathVariable Long customerId){
+		 ResponseEntity<CustomerData> rewardByCustomerResponse = service.getRewardByCustomerResponse(customerId);
+		return rewardByCustomerResponse;
+	}
+}
+
+========================================
+package com.cg.rewardSystem.entity;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+
+@Entity
+public class Transaction {
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	private Long customerId;
+	private Double amount;
+	private LocalDate transactionDate;
+	
+	
+	public Transaction() {
+		super();
+		// TODO Auto-generated constructor stub
+	}
+
+
+	public Transaction(Long customerId, Double amount, LocalDate transactionDate) {
+		super();
+		this.customerId = customerId;
+		this.amount = amount;
+		this.transactionDate = transactionDate;
+	}
+
+
+	public Long getId() {
+		return id;
+	}
+
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+
+	public Long getCustomerId() {
+		return customerId;
+	}
+
+
+	public void setCustomerId(Long customerId) {
+		this.customerId = customerId;
+	}
+
+
+	public Double getAmount() {
+		return amount;
+	}
+
+
+	public void setAmount(Double amount) {
+		this.amount = amount;
+	}
+
+
+	public LocalDate getTransactionDate() {
+		return transactionDate;
+	}
+
+
+	public void setTransactionDate(LocalDate transactionDate) {
+		this.transactionDate = transactionDate;
+	}
+	
+	
+
+}
+===========================================
+package com.cg.rewardSystem.excepition;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.NoSuchElementException;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+	
+	/**
+	 * Handle resource not found exception.
+	 * 
+	 */
+	@ExceptionHandler(NoSuchElementException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	@ResponseBody
+	public Map<String, String> handleNoSuchElementExcepition(NoSuchElementException ex){
+		return Collections.singletonMap("error", "Resource not found.");
+	}
+	
+	/**
+	 * Handle general exception.
+	 */
+	@ExceptionHandler(Exception.class)
+	@ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+	@ResponseBody
+	public Map<String, String> handelExcepition(Exception ex){
+		return Collections.singletonMap("error", "An unexpected error occurred.");
+	}
+
+	/**
+	 *	Handle if any error occurred
+	 *
+	 */
+	@ExceptionHandler(DataNotFoundExcepition.class)
+	public Map<String, String> handelDataNotFound(DataNotFoundExcepition ex){
+		return Collections.singletonMap("error", ex.getMessage());
+	}
+}
+
+package com.cg.rewardSystem.excepition;
+
+public class DataNotFoundExcepition extends RuntimeException {
+
+	public DataNotFoundExcepition(String message) {
+		super(message);
+		// TODO Auto-generated constructor stub
+	}
+
+		
+}
+
+
+==================================
+package com.cg.rewardSystem.Iservice;
+
+import java.util.Map;
+
+public interface IRewardService {
+	
+	public ResponseEntity<CustomerData> getRewardByCustomerResponse(Long customerId);
+}
+===================================
+package com.cg.rewardSystem.repository;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.cg.rewardSystem.entity.Transaction;
+
+public interface TranscationRepository extends JpaRepository<Transaction, Long> {
+	
+	/**
+	 * Fetch transaction for a given customer within a specified date range.
+	 * @param customerId The ID of the customer.
+	 * @param startDate The start date of the range.
+	 * @param endDate The end date of the range.
+	 * @return List of Transaction within the range.
+	 */
+	
+	@Query("SELECT t FROM Transaction t WHERE t.customerId=:customerId AND t.transactionDate BETWEEN :startDate AND :endDate")
+	public List<Transaction> findByCustomerIdAndDateRange(@Param("customerId") Long customerId,@Param("startDate")LocalDate startDate,
+			@Param("endDate")LocalDate endDate);
+
+}
+=====================================
+package com.cg.rewardSystem.serviceImpl;
+
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.cg.rewardSystem.Iservice.IRewardService;
+import com.cg.rewardSystem.config.CustomerData;
+import com.cg.rewardSystem.entity.Transaction;
+import com.cg.rewardSystem.excepition.DataNotFoundExcepition;
+import com.cg.rewardSystem.repository.TranscationRepository;
+
+@Service
+public class RewardService implements IRewardService{
+	
+	private Logger log=LoggerFactory.getLogger(RewardService.class);
+
+	@Autowired
+	private TranscationRepository transcationRepository;
+
+	/**
+	 * Retrieve reward points for a given customer over the last three months.
+	 * @param customerId The ID of the customer.
+	 * @return A map of months and corresponding reward points. 
+	 */
+
+	@Override
+	public ResponseEntity<CustomerData> getRewardByCustomerResponse(Long customerId) {
+		 LocalDate today=LocalDate.now();
+		 CustomerData csutomerData=new CustomerData();
+		 Map<String, Integer> monthData = new LinkedHashMap();
+		 
+		 try {
+			 csutomerData.setCustomerId(customerId);
+			 for(int i=0;i<3;i++) {
+				 LocalDate start=today.minusMonths(i+1).minusDays(1);
+				 log.info("start Date::"+start);
+				 LocalDate end=start.plusMonths(1).plusDays(1);
+				 log.info("end Date::"+end);
+				 List<Transaction> transcations=transcationRepository.findByCustomerIdAndDateRange(customerId, start, end);
+				 transcations.forEach(val-> log.info("Data from DB: Id-"+val.getId()+", CustomerId- "+val.getCustomerId()+", Amount- "+val.getAmount()+", Date- "+val.getTransactionDate()));
+				 int totalPoints=transcations.stream().mapToInt(t->calculatePoints(t.getAmount())).peek(p-> log.info("returing sum:"+p)).sum();
+				 monthData.put(end.getMonth().toString(), totalPoints);
+			 }
+			 int sum = monthData.values().stream().mapToInt(Integer :: intValue).sum();
+			 csutomerData.setMonth_points(monthData);
+			 csutomerData.setTotal(sum);
+		 }catch (Exception e) {
+			throw new DataNotFoundExcepition("Data is not found for mentioned customer id.");
+		}
+		 
+		 
+		return ResponseEntity.ok(csutomerData);
+	}
+	
+	
+	/**
+	 * Calculate reward points based on transaction amount.
+	 * @param amount The transaction amount.
+	 * @return The calculated reward points.
+	 */
+	private int calculatePoints(Double amount) {
+		int points=0;
+		if(amount>100) {
+			points += (amount.intValue()-100)*2;
+			points += 50;
+			log.info("Above 100 points :"+points);
+		}else if(amount>50) {
+			points += (amount.intValue()-50);
+			log.info("Above 50 points :"+points);
+		}
+		return points;
+	}
+}
+=================================
+spring.application.name=RewardApp
+
+server.port=8765
+
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.url=jdbc:h2:mem:rewardsDB
+spring.datasource.username=sa
+spring.datasource.password=
+
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+# Automatically update the schema based on your entity classes
+spring.jpa.hibernate.ddl-auto=update
+
+# Enable the H2 console for debugging
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+
+spring.jpa.show-sql=true
+========================================
+package com.cg.rewardSystem;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import com.cg.rewardSystem.serviceImpl.RewardService;
+
+@SpringBootTest
+class RewardAppApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+}
+=======================================================
+package com.cg.rewardSystem;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.ResponseEntity;
+
+import com.cg.rewardSystem.config.CustomerData;
+import com.cg.rewardSystem.entity.Transaction;
+import com.cg.rewardSystem.repository.TranscationRepository;
+import com.cg.rewardSystem.serviceImpl.RewardService;
+
+public class RewardServiceTest {
+	
+	@Mock
+    private TranscationRepository transactionRepository;
+
+    @InjectMocks
+    private RewardService service;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testGetRewardByCustomer_withValidCustomerId(){
+        Long customerId = 1L;
+        LocalDate today = LocalDate.now();
+        List<Transaction> transcatios=Arrays.asList(
+				new Transaction(1L, 100.0, LocalDate.now().minusMonths(1)),
+				new Transaction(1L, 150.0, LocalDate.now().minusMonths(2)),
+				new Transaction(1L, 200.0, LocalDate.now().minusMonths(3))
+				);
+		
+
+        // Mock repository responses
+        when(transactionRepository.findByCustomerIdAndDateRange(eq(customerId), any(LocalDate.class), any(LocalDate.class)))
+            .thenReturn(transcatios);
+
+        // Call the method
+        ResponseEntity<CustomerData> response = service.getRewardByCustomerResponse(customerId);
+
+        // Verify the response
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+
+        CustomerData customerData = response.getBody();
+        assertNotNull(customerData);
+        assertEquals(customerId, customerData.getCustomerId());
+        assertEquals(3, customerData.getMonth_points().size());
+        assertEquals(1350, customerData.getTotal());
+        
+    }
+    
+    @Test
+    public void testGetRewardByCustomer_withNoTransactions() {
+        Long customerId = 1L;
+        LocalDate today = LocalDate.now();
+
+        // Mock repository responses to return empty lists
+        when(transactionRepository.findByCustomerIdAndDateRange(eq(customerId), any(LocalDate.class), any(LocalDate.class)))
+            .thenReturn(Collections.emptyList());
+
+        // Call the method
+        ResponseEntity<CustomerData> response = service.getRewardByCustomerResponse(customerId);
+
+        // Verify the response
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCodeValue());
+
+        CustomerData customerData = response.getBody();
+        assertNotNull(customerData);
+        assertEquals(customerId, customerData.getCustomerId());
+        assertEquals(3, customerData.getMonth_points().size());
+        assertEquals(0, customerData.getTotal());
+
+        
+    }
+	
+}
+
+
+package com.cg.rewardSystem;
+
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.cg.rewardSystem.Iservice.IRewardService;
+import com.cg.rewardSystem.config.CustomerData;
+import com.cg.rewardSystem.controller.RewardController;  
+
+@WebMvcTest(RewardController.class)
+public class RewardControllerIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private IRewardService rewardService;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testGetRewardsResponse_Positive() throws Exception {
+        Long customerId = 1L;
+        
+        CustomerData customerData = new CustomerData();
+        customerData.setCustomerId(customerId);
+        customerData.setMonth_points(Map.of("JANUARY", 120, "FEBRUARY", 90, "DECEMBER", 30));
+        customerData.setTotal(240);
+
+        when(rewardService.getRewardByCustomerResponse(customerId)).thenReturn(ResponseEntity.ok(customerData));
+
+        mockMvc.perform(get("/rewards/id/{customerId}", customerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId", is(customerId.intValue())))
+                .andExpect(jsonPath("$.month_points.JANUARY", is(120)))
+                .andExpect(jsonPath("$.month_points.FEBRUARY", is(90)))
+                .andExpect(jsonPath("$.month_points.DECEMBER", is(30)))
+                .andExpect(jsonPath("$.total", is(240)));
+    }
+
+    @Test
+    public void testGetRewardsResponse_Negative() throws Exception {
+        Long customerId = 1L;
+
+        when(rewardService.getRewardByCustomerResponse(customerId)).thenReturn(ResponseEntity.notFound().build());
+
+        mockMvc.perform(get("/rewards/id/{customerId}", customerId))
+                .andExpect(status().isNotFound());
+    }
+}
+
+==============================================
+RewardApp Application
+========================
+
+The Reward System Application is a Spring Boot application designed to calculate and retrieve reward points for customers
+based on their transaction history. The application provides RESTful endpoints to fetch reward points for a given customer over 
+the last three months.
+
+Project Structure
+--------------------
+
+The project follows a typical Spring Boot structure:
+
+RewardSystemApp/
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/
+│   │   │       └── cpg/
+│   │   │           └── rewardSystem/
+│   │   │				└── RewardAppApplication.java/
+│   │   │               		├── config/
+│   │   │               		│   └── DataLoder.java
+│   │   │ 				│   └── CustomerData.java
+│   │   │               		├── controller/
+│   │   │               		│   └── RewardController.java
+│   │   │               		├── entity/
+│   │   │               		│   └── Transaction.java
+│   │   │               		├── excepition/
+│   │   │               		│   └── GlobalExcepitionHandler.java
+│   │   │                     ├── Iservice/
+│   │   │               		│   └── IRewardService.java
+│   │   │                     ├── repository/
+│   │   │               		│   └── TranscationRepository.java
+│   │   │               		└── serviceImpl/
+│   │   │                   		└── RewardService.java
+│   │   └── resources/
+│   │       └── application.properties
+│   └── test/
+│       └── java/
+│           └── com/
+│               └── cpg/
+│                   └── rewardSystem/
+│                       ├── RewardAppApplicationTests.java
+│                       ├── RewardControllerIntegrationTest.java
+│				└── RewardServiceTest.java
+└── pom.xml
+
+Implementation Details
+--------------------------
+Entity
+------
+Transaction.java
+
+The Transaction entity represents a transaction made by a customer. 
+It includes fields for the  ID, customer ID, transaction amount, and transaction date.
+
+@Entity
+public class Transaction {
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	private Long customerId;
+	private Double amount;
+	private LocalDate transactionDate;
+	
+	//Constructor
+	//Setter & Getter methods
+}
+
+Repository
+-------------
+
+TranscationRepository.java
+
+The TranscationRepository interface extends JpaRepository and provides a custom query method 
+to find transactions by customer ID and date range.
+
+public interface TranscationRepository extends JpaRepository<Transaction, Long> {
+
+	@Query("SELECT t FROM Transaction t WHERE t.customerId=:customerId AND t.transactionDate BETWEEN :startDate AND :endDate")
+	public List<Transaction> findByCustomerIdAndDateRange(@Param("customerId") Long customerId,
+					@Param("startDate")LocalDate startDate,@Param("endDate")LocalDate endDate);
+
+}
+
+Service
+----------
+
+IRewardService.java
+
+The IRewardService interface defines the contract for the reward service.
+
+public interface IRewardService {
+	public ResponseEntity<CustomerData> getRewardByCustomerResponse(Long customerId);
+}
+
+RewardService.java
+
+The RewardService class implements the IRewardService interface and provides methods to 
+calculate reward points and retrieve reward points for a given customer.
+
+@Service
+public class RewardService implements IRewardService{
+	@Autowired
+	private TranscationRepository transcationRepository;
+
+	private int calculatePoints(Double amount) {
+		//Calculate reward points
+	}
+
+	@Override
+	public ResponseEntity<CustomerData> getRewardByCustomer(Long customerId) {
+		  // Retrieve reward points for a given customer
+	}
+}
+
+Exception
+-----------
+
+GlobalExceptionHandler.java
+
+Handle the unexpected Exception if occurred in the project
+
+@ControllerAdvice
+public class GlobalExcepitionHandler {
+	
+
+	@ExceptionHandler(NoSuchElementException.class)
+	@ResponseStatus(HttpStatus.NOT_FOUND)
+	@ResponseBody
+	public Map<String, String> handleNoSuchElementExcepition(NoSuchElementException ex){
+		return Collections.singletonMap("error", "Resource not found.");
+	}
+	
+
+	@ExceptionHandler(Exception.class)
+	@ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+	@ResponseBody
+	public Map<String, String> handelExcepition(Exception ex){
+		return Collections.singletonMap("error", "An unexpected error occurred.");
+	}
+	
+	/**
+	 *	Handle if any error occurred
+	 *
+	 */
+	@ExceptionHandler(DataNotFoundExcepition.class)
+	public Map<String, String> handelDataNotFound(DataNotFoundExcepition ex){
+		return Collections.singletonMap("error", ex.getMessage());
+	}
+}
+
+Controller
+---------------
+
+RewardController.java
+
+The RewardController class provides a RESTful end-point to retrieve reward points for a given customer.
+
+@RestController
+@RequestMapping("/rewards")
+public class RewardController {
+
+	@Autowired
+	private IRewardService service;
+	
+	
+	@GetMapping("/{customerId}")
+	public Map<String, Integer> getRewards(@PathVariable Long customerId){
+		// return the result to customer
+	}
+}
+
+Test
+----------
+
+RewardServiceTest.java
+
+JUnit test for the RewardService class.
+
+public class RewardServiceTest {
+
+	@Mock
+	private TranscationRepository transcationRepository;
+	
+	@InjectMocks
+	private RewardService rewardService;
+	
+	@BeforeEach
+	public void setup() {
+		MockitoAnnotations.openMocks(this);
+	}
+	
+	
+	@Test
+	void testGetRewardByCustomer_withValidCustomerId() {
+		// Positive test case
+	}
+	
+	@Test
+	void testGetRewardByCustomer_withNoTransactions() {
+		// Negative test case
+	}
+		
+}
+
+RewardAppApplicationTests.java
+
+Integration test for the RewardController class.
+
+@SpringBootTest
+class RewardAppApplicationTests {
+
+	 
+	@Test
+	void contextLoads() {
+	}
+	 
+}
+
+package com.cg.rewardSystem;
+
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.cg.rewardSystem.Iservice.IRewardService;
+import com.cg.rewardSystem.config.CustomerData;
+import com.cg.rewardSystem.controller.RewardController;  
+
+@WebMvcTest(RewardController.class)
+public class RewardControllerIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private IRewardService rewardService;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void testGetRewardsResponse_Positive() throws Exception {
+        Long customerId = 1L;
+        
+        CustomerData customerData = new CustomerData();
+        customerData.setCustomerId(customerId);
+        customerData.setMonth_points(Map.of("JANUARY", 120, "FEBRUARY", 90, "DECEMBER", 30));
+        customerData.setTotal(240);
+
+        when(rewardService.getRewardByCustomerResponse(customerId)).thenReturn(ResponseEntity.ok(customerData));
+
+        mockMvc.perform(get("/rewards/id/{customerId}", customerId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId", is(customerId.intValue())))
+                .andExpect(jsonPath("$.month_points.JANUARY", is(120)))
+                .andExpect(jsonPath("$.month_points.FEBRUARY", is(90)))
+                .andExpect(jsonPath("$.month_points.DECEMBER", is(30)))
+                .andExpect(jsonPath("$.total", is(240)));
+    }
+
+    @Test
+    public void testGetRewardsResponse_Negative() throws Exception {
+        Long customerId = 1L;
+
+        when(rewardService.getRewardByCustomerResponse(customerId)).thenReturn(ResponseEntity.notFound().build());
+
+        mockMvc.perform(get("/rewards/id/{customerId}", customerId))
+                .andExpect(status().isNotFound());
+    }
+}
+
+Running the Application
+-------------------------
+
+To run the application, use the following command:
+mvn spring-boot:run
+
+Running the Tests
+--------------------
+
+To run the tests, use the following command:
+mvn test
+
+Conclusion
+-----------
+
+This project demonstrates a simple reward system application using Spring Boot. It includes a RESTful API to retrieve reward points for customers, 
+along with unit and integration tests to ensure the functionality of the service and controller layers.
+==============================
+		<dependency>
+		    <groupId>org.mockito</groupId>
+		    <artifactId>mockito-core</artifactId>
+		    <scope>test</scope>
+		</dependency>
